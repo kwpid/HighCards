@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "./lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,6 +13,7 @@ import { GameModeSelection } from "@/components/GameModeSelection";
 import { QueueScreen } from "@/components/QueueScreen";
 import { GameScreen } from "@/components/GameScreen";
 import { GameResultScreen } from "@/components/GameResultScreen";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 type ScreenName = 'auth' | 'menu' | 'game-mode-selection' | 'queue' | 'game' | 'result';
 
@@ -26,15 +27,24 @@ interface ComponentNavigationProps {
 }
 
 function AppContent() {
-  const { user, loading } = useAuth();
+  const { user, loading, initialized } = useAuth();
   const [navigation, setNavigation] = useState<NavigationState>({ 
-    screen: user ? 'menu' : 'auth' 
+    screen: 'auth'
   });
 
-  const navigate = (screen: ScreenName, data?: any) => {
+  const navigate = React.useCallback((screen: ScreenName, data?: any) => {
     setNavigation({ screen, data });
-  };
+  }, []);
 
+  // Update navigation when user state changes
+  React.useEffect(() => {
+    if (initialized && !loading) {
+      const targetScreen = user ? 'menu' : 'auth';
+      setNavigation(prev => prev.screen !== targetScreen ? { screen: targetScreen } : prev);
+    }
+  }, [user, loading, initialized]);
+
+  // Early return for loading state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
@@ -48,68 +58,76 @@ function AppContent() {
     );
   }
 
+  // Early return for unauthenticated users
   if (!user) {
     return <AuthScreen />;
   }
 
-  switch (navigation.screen) {
-    case 'menu':
-      return <MainMenu onNavigate={navigate as ComponentNavigationProps['onNavigate']} />;
-    
-    case 'game-mode-selection':
-      return (
-        <GameModeSelection 
-          onNavigate={navigate as ComponentNavigationProps['onNavigate']}
-          isRanked={navigation.data?.isRanked || false}
-        />
-      );
-    
-    case 'queue':
-      return (
-        <QueueScreen 
-          onNavigate={navigate as ComponentNavigationProps['onNavigate']}
-          gameMode={navigation.data?.mode || '1v1'}
-          isRanked={navigation.data?.isRanked || false}
-        />
-      );
-    
-    case 'game':
-      return (
-        <GameScreen 
-          onNavigate={navigate as ComponentNavigationProps['onNavigate']}
-          gameMode={navigation.data?.gameMode || '1v1'}
-          isRanked={navigation.data?.isRanked || false}
-          playerName={navigation.data?.playerName || user.username}
-        />
-      );
-    
-    case 'result':
-      return (
-        <GameResultScreen 
-          onNavigate={navigate as ComponentNavigationProps['onNavigate']}
-          gameState={navigation.data?.gameState}
-          gameMode={navigation.data?.gameMode || '1v1'}
-          isRanked={navigation.data?.isRanked || false}
-        />
-      );
-    
-    default:
-      return <MainMenu onNavigate={navigate as ComponentNavigationProps['onNavigate']} />;
-  }
+  // Render the appropriate screen based on navigation state
+  const renderScreen = () => {
+    switch (navigation.screen) {
+      case 'menu':
+        return <MainMenu onNavigate={navigate} />;
+      
+      case 'game-mode-selection':
+        return (
+          <GameModeSelection 
+            onNavigate={navigate}
+            isRanked={navigation.data?.isRanked || false}
+          />
+        );
+      
+      case 'queue':
+        return (
+          <QueueScreen 
+            onNavigate={navigate}
+            gameMode={navigation.data?.mode || '1v1'}
+            isRanked={navigation.data?.isRanked || false}
+          />
+        );
+      
+      case 'game':
+        return (
+          <GameScreen 
+            onNavigate={navigate}
+            gameMode={navigation.data?.gameMode || '1v1'}
+            isRanked={navigation.data?.isRanked || false}
+            playerName={navigation.data?.playerName || user.username}
+          />
+        );
+      
+      case 'result':
+        return (
+          <GameResultScreen 
+            onNavigate={navigate}
+            gameState={navigation.data?.gameState}
+            gameMode={navigation.data?.gameMode || '1v1'}
+            isRanked={navigation.data?.isRanked || false}
+          />
+        );
+      
+      default:
+        return <MainMenu onNavigate={navigate} />;
+    }
+  };
+
+  return renderScreen();
 }
 
 function App() {
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider defaultTheme="dark" storageKey="highcard-theme">
-        <TooltipProvider>
-          <AuthProvider>
-            <AppContent />
-            <Toaster />
-          </AuthProvider>
-        </TooltipProvider>
-      </ThemeProvider>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider defaultTheme="dark" storageKey="highcard-theme">
+          <TooltipProvider>
+            <AuthProvider>
+              <AppContent />
+              <Toaster />
+            </AuthProvider>
+          </TooltipProvider>
+        </ThemeProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
   );
 }
 
