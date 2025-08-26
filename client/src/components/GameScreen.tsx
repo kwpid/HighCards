@@ -30,7 +30,18 @@ export function GameScreen({ onNavigate, gameMode, isRanked, playerName }: GameS
 
   useEffect(() => {
     // Handle AI turns and round completion
-    if (gameState && !isGameComplete()) {
+    if (gameState && !isGameComplete() && !waitingForAI && gameState.currentRound <= gameState.maxRounds) {
+      // Debug log to help identify issues
+      console.log('GameScreen useEffect:', {
+        currentRound: gameState.currentRound,
+        maxRounds: gameState.maxRounds,
+        isGameComplete: isGameComplete(),
+        waitingForAI,
+        hasPlayerPlayed,
+        playedCards: Object.keys(gameState.playedCards).length,
+        totalPlayers: gameState.players.length
+      });
+      
       if (isRoundComplete()) {
         // Show round result
         const winner = getCurrentRoundWinner();
@@ -57,28 +68,55 @@ export function GameScreen({ onNavigate, gameMode, isRanked, playerName }: GameS
         }
         
         setRoundResult({ winner, message });
-      } else {
-        // Let AI players make their moves
+      } else if (!hasPlayerPlayed) {
+        // Only let AI players make their moves if the player hasn't played yet
         const aiPlayers = gameState.players.filter(p => p.isAI && !gameState.playedCards[p.id]);
-        if (aiPlayers.length > 0 && !waitingForAI) {
+        if (aiPlayers.length > 0 && gameState.currentRound <= gameState.maxRounds) {
+          // Prevent AI from moving if game is complete or if we're already waiting
+          if (isGameComplete() || waitingForAI) {
+            return;
+          }
+          
+          // Check if AI players actually have cards to play
+          const aiPlayersWithCards = aiPlayers.filter(aiPlayer => 
+            aiPlayer.hand.filter(card => card.type === 'regular').length > 0
+          );
+          
+          if (aiPlayersWithCards.length === 0) {
+            console.log('AI players have no cards to play');
+            return;
+          }
+          
+          console.log('AI is making moves:', aiPlayersWithCards.map(p => p.id));
           setWaitingForAI(true);
           
           // Simulate AI thinking time
           setTimeout(() => {
-            aiPlayers.forEach((aiPlayer) => {
-              // AI selects a random card from their hand
-              const availableCards = aiPlayer.hand.filter(card => card.type === 'regular');
-              if (availableCards.length > 0) {
-                const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
-                playCard(aiPlayer.id, randomCard);
-              }
-            });
+            // Double-check that game is still active before AI moves
+            if (!isGameComplete() && gameState.currentRound <= gameState.maxRounds) {
+              aiPlayersWithCards.forEach((aiPlayer) => {
+                // AI selects a random card from their hand
+                const availableCards = aiPlayer.hand.filter(card => card.type === 'regular');
+                if (availableCards.length > 0) {
+                  const randomCard = availableCards[Math.floor(Math.random() * availableCards.length)];
+                  playCard(aiPlayer.id, randomCard);
+                }
+              });
+            }
             setWaitingForAI(false);
           }, 1500);
         }
       }
     }
-  }, [gameState, isRoundComplete, getCurrentRoundWinner, isGameComplete, gameMode, playCard, waitingForAI]);
+  }, [gameState, isRoundComplete, getCurrentRoundWinner, isGameComplete, gameMode, playCard, waitingForAI, hasPlayerPlayed]);
+
+  if (!gameState) {
+    return <div className="min-h-screen flex items-center justify-center">Loading game...</div>;
+  }
+
+  const player = gameState.players.find(p => p.id === 'player');
+  const opponents = gameState.players.filter(p => p.id !== 'player');
+  const hasPlayerPlayed = gameState.playedCards['player'] !== undefined;
 
   useEffect(() => {
     // Navigate to results screen when game is complete
@@ -92,14 +130,6 @@ export function GameScreen({ onNavigate, gameMode, isRanked, playerName }: GameS
       }, 2000);
     }
   }, [isGameComplete, onNavigate, gameState, gameMode, isRanked]);
-
-  if (!gameState) {
-    return <div className="min-h-screen flex items-center justify-center">Loading game...</div>;
-  }
-
-  const player = gameState.players.find(p => p.id === 'player');
-  const opponents = gameState.players.filter(p => p.id !== 'player');
-  const hasPlayerPlayed = gameState.playedCards['player'] !== undefined;
 
   const handleCardSelect = (card: GameCard) => {
     if (hasPlayerPlayed || waitingForAI) return;

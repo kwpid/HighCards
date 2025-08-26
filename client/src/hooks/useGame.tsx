@@ -216,7 +216,7 @@ export function useGame(): UseGameReturn {
   }, [gameState, isRoundComplete, getCurrentRoundWinner]);
 
   const isGameComplete = useCallback(() => {
-    return gameState?.gameStatus === 'finished';
+    return gameState?.gameStatus === 'finished' || gameState?.currentRound > gameState?.maxRounds;
   }, [gameState]);
 
   const getFinalScores = useCallback(() => {
