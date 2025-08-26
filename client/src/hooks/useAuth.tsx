@@ -25,42 +25,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let isMounted = true;
     
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
-      if (!isMounted) return;
-      
-      try {
-        if (firebaseUser) {
-          const userData = await getUserData(firebaseUser.uid);
-          const seasonData = await getPlayerSeasonData(firebaseUser.uid);
-          
-          if (isMounted) {
-            setUser(userData);
-            setPlayerSeason(seasonData);
+    // Add error boundary for the entire auth initialization
+    try {
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
+        if (!isMounted) return;
+        
+        try {
+          if (firebaseUser) {
+            const userData = await getUserData(firebaseUser.uid);
+            const seasonData = await getPlayerSeasonData(firebaseUser.uid);
+            
+            if (isMounted) {
+              setUser(userData);
+              setPlayerSeason(seasonData);
+            }
+          } else {
+            if (isMounted) {
+              setUser(null);
+              setPlayerSeason(null);
+            }
           }
-        } else {
+        } catch (error) {
+          console.error("Error fetching user data:", error);
           if (isMounted) {
             setUser(null);
             setPlayerSeason(null);
           }
+        } finally {
+          if (isMounted) {
+            setLoading(false);
+            setInitialized(true);
+          }
         }
-      } catch (error) {
-        console.error("Error fetching user data:", error);
-        if (isMounted) {
-          setUser(null);
-          setPlayerSeason(null);
-        }
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          setInitialized(true);
-        }
-      }
-    });
+      });
 
-    return () => {
-      isMounted = false;
-      unsubscribe();
-    };
+      return () => {
+        isMounted = false;
+        unsubscribe();
+      };
+    } catch (error) {
+      console.error("Critical error in auth initialization:", error);
+      // Set safe defaults if auth initialization fails
+      if (isMounted) {
+        setUser(null);
+        setPlayerSeason(null);
+        setLoading(false);
+        setInitialized(true);
+      }
+      return () => {
+        isMounted = false;
+      };
+    }
   }, []);
 
   const signUp = async (userData: InsertUser) => {

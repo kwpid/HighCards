@@ -22,6 +22,15 @@ export class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('ErrorBoundary caught an error:', error, errorInfo);
+    
+    // Special handling for initialization errors
+    if (error.message.includes("Cannot access 'k' before initialization")) {
+      console.error('Detected initialization error - attempting recovery...');
+      // Force a reload to recover from initialization issues
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    }
   }
 
   render() {

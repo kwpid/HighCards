@@ -14,6 +14,7 @@ import { QueueScreen } from "@/components/QueueScreen";
 import { GameScreen } from "@/components/GameScreen";
 import { GameResultScreen } from "@/components/GameResultScreen";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AppInitializer } from "@/components/AppInitializer";
 
 type ScreenName = 'auth' | 'menu' | 'game-mode-selection' | 'queue' | 'game' | 'result';
 
@@ -27,7 +28,7 @@ interface ComponentNavigationProps {
 }
 
 function AppContent() {
-  const { user, loading, initialized } = useAuth();
+  const { user } = useAuth();
   const [navigation, setNavigation] = useState<NavigationState>({ 
     screen: 'auth'
   });
@@ -38,78 +39,80 @@ function AppContent() {
 
   // Update navigation when user state changes
   React.useEffect(() => {
-    if (initialized && !loading) {
-      const targetScreen = user ? 'menu' : 'auth';
-      setNavigation(prev => prev.screen !== targetScreen ? { screen: targetScreen } : prev);
-    }
-  }, [user, loading, initialized]);
-
-  // Early return for loading state
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-primary/20 rounded-full mx-auto mb-4 flex items-center justify-center animate-pulse">
-            <div className="w-8 h-8 bg-primary rounded-full"></div>
-          </div>
-          <p className="text-foreground font-medium">Loading HighCard...</p>
-        </div>
-      </div>
-    );
-  }
+    const targetScreen = user ? 'menu' : 'auth';
+    setNavigation(prev => prev.screen !== targetScreen ? { screen: targetScreen } : prev);
+  }, [user]);
 
   // Early return for unauthenticated users
   if (!user) {
     return <AuthScreen />;
   }
 
-  // Render the appropriate screen based on navigation state
-  const renderScreen = () => {
-    switch (navigation.screen) {
-      case 'menu':
-        return <MainMenu onNavigate={navigate} />;
-      
-      case 'game-mode-selection':
-        return (
-          <GameModeSelection 
-            onNavigate={navigate}
-            isRanked={navigation.data?.isRanked || false}
-          />
-        );
-      
-      case 'queue':
-        return (
-          <QueueScreen 
-            onNavigate={navigate}
-            gameMode={navigation.data?.mode || '1v1'}
-            isRanked={navigation.data?.isRanked || false}
-          />
-        );
-      
-      case 'game':
-        return (
-          <GameScreen 
-            onNavigate={navigate}
-            gameMode={navigation.data?.gameMode || '1v1'}
-            isRanked={navigation.data?.isRanked || false}
-            playerName={navigation.data?.playerName || user.username}
-          />
-        );
-      
-      case 'result':
-        return (
-          <GameResultScreen 
-            onNavigate={navigate}
-            gameState={navigation.data?.gameState}
-            gameMode={navigation.data?.gameMode || '1v1'}
-            isRanked={navigation.data?.isRanked || false}
-          />
-        );
-      
-      default:
-        return <MainMenu onNavigate={navigate} />;
+  // Safe render function with error handling
+  const renderScreen = React.useCallback(() => {
+    try {
+      switch (navigation.screen) {
+        case 'menu':
+          return <MainMenu onNavigate={navigate} />;
+        
+        case 'game-mode-selection':
+          return (
+            <GameModeSelection 
+              onNavigate={navigate}
+              isRanked={navigation.data?.isRanked || false}
+            />
+          );
+        
+        case 'queue':
+          return (
+            <QueueScreen 
+              onNavigate={navigate}
+              gameMode={navigation.data?.mode || '1v1'}
+              isRanked={navigation.data?.isRanked || false}
+            />
+          );
+        
+        case 'game':
+          return (
+            <GameScreen 
+              onNavigate={navigate}
+              gameMode={navigation.data?.gameMode || '1v1'}
+              isRanked={navigation.data?.isRanked || false}
+              playerName={navigation.data?.playerName || user.username}
+            />
+          );
+        
+        case 'result':
+          return (
+            <GameResultScreen 
+              onNavigate={navigate}
+              gameState={navigation.data?.gameState}
+              gameMode={navigation.data?.gameMode || '1v1'}
+              isRanked={navigation.data?.isRanked || false}
+            />
+          );
+        
+        default:
+          return <MainMenu onNavigate={navigate} />;
+      }
+    } catch (error) {
+      console.error('Error rendering screen:', error);
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-background">
+          <div className="text-center">
+            <h1 className="text-xl font-bold text-foreground mb-2">Error Loading Screen</h1>
+            <p className="text-muted-foreground mb-4">Please try refreshing the page.</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="px-4 py-2 bg-primary text-primary-foreground rounded hover:bg-primary/90"
+            >
+              Refresh Page
+            </button>
+          </div>
+        </div>
+      );
     }
-  };
+  }, [navigation, navigate, user]);
 
   return renderScreen();
 }
@@ -121,8 +124,10 @@ function App() {
         <ThemeProvider defaultTheme="dark" storageKey="highcard-theme">
           <TooltipProvider>
             <AuthProvider>
-              <AppContent />
-              <Toaster />
+              <AppInitializer>
+                <AppContent />
+                <Toaster />
+              </AppInitializer>
             </AuthProvider>
           </TooltipProvider>
         </ThemeProvider>
